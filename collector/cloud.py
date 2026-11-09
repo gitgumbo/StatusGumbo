@@ -17,7 +17,9 @@ Sessions a routine started are missing from that list, so they come from two
 more undocumented calls, found in the 2.1.288 binary and verified live on
 2026-10-03: `GET /v1/code/triggers`, which answers only with the
 `anthropic-beta: ccr-triggers-2026-01-30` header, and
-`GET /v1/code/sessions?trigger_id=…`. Neither's paging or ordering is known.
+`GET /v1/code/sessions?trigger_id=…`. The trigger list's paging was seen on
+2026-10-04 (`limit` and `cursor` honoured, no overlap), its ordering was not;
+neither the paging nor the ordering of a trigger's runs is known.
 
 Authentication is the claude.ai login Claude Code already keeps on disk. It
 is read, never written: when Claude Code's access token expires the section
