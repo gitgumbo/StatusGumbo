@@ -41,7 +41,7 @@ from collector.store import _dig
 from collector.usage import _is_number
 
 API_URL = "https://api.anthropic.com/v1/code/sessions"
-POLL_SECS = 60               # One poll a minute: 1-3 list pages, 1-3 trigger
+POLL_SECS = 60               # One poll a minute: 1-3 list pages, 1-10 trigger
                              # list pages, and a lookup per routine session that may
                              # be shown. The phone refreshes every
                              # 5s, but a cloud session's state is not a 5s
@@ -50,6 +50,10 @@ MAX_BACKOFF_SECS = 10 * 60   # Ceiling for the doubling after a failure or 429.
 PAGE_SIZE = 100
 MAX_PAGES = 3                # Paging stops at LOOKBACK_SECS; this is only the
                              # guard against a cursor that never ends.
+TRIGGER_MAX_PAGES = 10       # The trigger list has no LOOKBACK_SECS stop and
+                             # only grows (every one-off launch leaves a trigger;
+                             # 25 on 2026-10-04), so it gets its own, larger
+                             # guard: 1000 triggers before "has more pages".
 LOOKBACK_SECS = 14 * 24 * 3600
                              # Results come newest-activity first, so once a
                              # page reaches sessions this old nothing further
@@ -294,9 +298,9 @@ def _routine_sessions(headers, now, skip, archived, quiet, get):
     cursor = None
     # Paged like the plain list (observed 2026-10-04: limit and cursor both
     # honoured). Its order is not known to be by firing, so there is no
-    # early stop; MAX_PAGES guards against a cursor that never ends, and
-    # whatever is left past it, or past a has_more with no cursor, is said.
-    for _ in range(MAX_PAGES):
+    # early stop; TRIGGER_MAX_PAGES guards against a cursor that never ends,
+    # and whatever is left past it, or past a has_more with no cursor, is said.
+    for _ in range(TRIGGER_MAX_PAGES):
         query = {"limit": PAGE_SIZE}
         if cursor:
             query["cursor"] = cursor

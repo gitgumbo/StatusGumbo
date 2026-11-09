@@ -15,6 +15,7 @@ from collector.cloud import (
     PAGE_SIZE,
     POLL_SECS,
     QUIET_RECHECK_SECS,
+    TRIGGER_MAX_PAGES,
     ApiError,
     CloudPoller,
     LoginUnavailable,
@@ -413,7 +414,10 @@ class TestRoutineSessions(unittest.TestCase):
     def test_the_quiet_map_is_not_pruned_from_an_incomplete_trigger_list(self):
         # Triggers past the last page read may still name what is in it.
         quiet = {"cse_gone": NOW - 60}
-        api = RoutineApi(trigger_pages={None: ([], "c1"), "c1": ([], "c2"), "c2": ([], "c3")})
+        pages = {None: ([], "c1")}
+        for n in range(1, TRIGGER_MAX_PAGES):
+            pages["c%d" % n] = ([], "c%d" % (n + 1))
+        api = RoutineApi(trigger_pages=pages)
         with unittest.mock.patch("sys.stderr"):
             fetch_sessions("tok", "org", NOW, api, quiet=quiet)
         self.assertEqual(quiet, {"cse_gone": NOW - 60})
@@ -471,16 +475,31 @@ class TestRoutineSessions(unittest.TestCase):
             {"limit": [str(PAGE_SIZE)], "cursor": ["c1"]},
         ])
 
+    def test_a_trigger_list_longer_than_the_plain_lists_cap_is_read_to_the_end(self):
+        # The plain list stops at LOOKBACK_SECS; the trigger list has no such
+        # stop and only grows, so the plain list's 3-page cap would leave a
+        # permanent "incomplete" once past 300 triggers.
+        pages = {}
+        for n in range(MAX_PAGES + 1):
+            pages[None if n == 0 else "c%d" % n] = (
+                [raw_trigger("trig_%d" % n, "cse_r%d" % n)],
+                "c%d" % (n + 1) if n < MAX_PAGES else None)
+        api = RoutineApi(trigger_pages=pages, by_trigger={
+            "trig_%d" % n: [raw_session(id="cse_r%d" % n)] for n in range(MAX_PAGES + 1)})
+        sessions, _, routine = fetch_sessions("tok", "org", NOW, api)
+        self.assertIsNone(routine)
+        self.assertEqual(len(sessions), MAX_PAGES + 1)
+
     def test_a_trigger_cursor_that_never_ends_stops_and_is_said(self):
         pages = {None: ([raw_trigger()], "c1")}
-        for n in range(1, MAX_PAGES + 1):
+        for n in range(1, TRIGGER_MAX_PAGES + 1):
             pages["c%d" % n] = ([], "c%d" % (n + 1))
         api = RoutineApi(trigger_pages=pages, by_trigger={"trig_1": [raw_session(id="cse_routine")]})
         with unittest.mock.patch("sys.stderr"):
             sessions, state, routine = fetch_sessions("tok", "org", NOW, api)
         self.assertEqual([s["id"] for s in sessions], ["cse_routine"])
         self.assertEqual(routine, "routine sessions incomplete: trigger list has more pages")
-        self.assertEqual(len([u for u, _ in api.calls if "/triggers" in u]), MAX_PAGES)
+        self.assertEqual(len([u for u, _ in api.calls if "/triggers" in u]), TRIGGER_MAX_PAGES)
 
     def test_has_more_without_a_cursor_is_said(self):
         # Nothing to ask for the rest with, so it is missing, and said.
