@@ -297,6 +297,7 @@ def _routine_sessions(headers, now, skip, archived, quiet, get):
     sessions = []
     problems = []
     triggers = []
+    seen = set()
     cursor = None
     # Paged like the plain list (observed 2026-10-04: limit and cursor both
     # honoured). Its order is not known to be by firing, so there is no
@@ -338,6 +339,11 @@ def _routine_sessions(headers, now, skip, archived, quiet, get):
             continue
         if session_id in skip or session_id in archived or now - fired > FIRED_LOOKBACK_SECS:
             continue
+        # Pages can overlap if the list changes between requests; a run
+        # named twice is one card and one lookup.
+        if session_id in seen:
+            continue
+        seen.add(session_id)
         if now - quiet.get(session_id, now - QUIET_RECHECK_SECS) < QUIET_RECHECK_SECS:
             continue
         query = urllib.parse.urlencode({"trigger_id": trigger_id, "limit": PAGE_SIZE})

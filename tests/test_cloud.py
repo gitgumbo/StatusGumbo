@@ -475,6 +475,20 @@ class TestRoutineSessions(unittest.TestCase):
             {"limit": [str(PAGE_SIZE)], "cursor": ["c1"]},
         ])
 
+    def test_a_trigger_on_two_pages_is_one_card_and_one_lookup(self):
+        # Pages can overlap when the list changes between requests.
+        api = RoutineApi(
+            trigger_pages={
+                None: ([raw_trigger()], "c1"),
+                "c1": ([raw_trigger()], None),
+            },
+            by_trigger={"trig_1": [raw_session(id="cse_routine")]},
+        )
+        sessions, _, routine = fetch_sessions("tok", "org", NOW, api)
+        self.assertEqual([s["id"] for s in sessions], ["cse_routine"])
+        self.assertEqual(len(api.trigger_lookups()), 1)
+        self.assertIsNone(routine)
+
     def test_a_trigger_list_longer_than_the_plain_lists_cap_is_read_to_the_end(self):
         # The plain list stops at LOOKBACK_SECS; the trigger list has no such
         # stop and only grows, so the plain list's 3-page cap would leave a
