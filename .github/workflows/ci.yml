@@ -11,15 +11,16 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    # In the official image, not setup-python: setup-python has no 3.8 for
+    # Ubuntu 26.04 (ubuntu-latest from 2026-11), and the image keeps it.
+    container: python:${{ matrix.python }}
     strategy:
       matrix:
         # The oldest Python the README promises, and the image's.
         python: ["3.8", "3.12"]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python }}
+      - run: apt-get update -qq && apt-get install -y -qq jq
       - run: python3 -m unittest discover -s tests -t . -v
       - run: sh tests/test_report.sh
       - run: sh tests/test_heartbeat.sh
